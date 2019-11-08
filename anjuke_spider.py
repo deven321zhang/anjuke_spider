@@ -58,7 +58,8 @@ class AnjukeSpider(object):
         match_obj = re.search(r'l1=(\d+\.\d+)&l2=(\d+\.\d+).*?commid=(\d+)', house_url, re.S)
         
         info['房源id'] = match_obj.group(3)
-        info['维度,经度'] = '{},{}'.format(match_obj.group(1), match_obj.group(2))
+        info['纬度'] = match_obj.group(1)
+        info['经度'] = match_obj.group(2)
         info['房源名称'] = pyquery_doc('.comm-title > a').attr('title')
 
         dts = pyquery_doc('.basic-infos-box > dl dt').items()
@@ -91,21 +92,32 @@ class AnjukeSpider(object):
                 info['二手房房源数'] = a.text().strip()
 
             if '租房源数' in span_text:
-                info['租房源数'] = a.text().strip()
+                rent_num = a.text().strip()
+                info['租房源数'] = rent_num
+                if rent_num == '暂无数据':
+                    info['租金价格中位数'] = '暂无数据'
+                else:
+                    info['租金价格中位数'] = self.get_rent_middle(url=a.attr('href'))
 
         match_obj = re.search(r'"comm_midprice":"(\d+)"', resp.decode(), re.S)
         info['均价'] = match_obj.group(1)
-
-        match_obj = re.search(r'"community":(\[.*?\])', resp.decode(), re.S)
-        price_list = eval(match_obj.group(1))
-        if len(price_list) >= 10:
-            price_list = price_list[-10:]
-        values = []
-        for price_dict in price_list:
-            for value in price_dict.values():
-                values.append(int(value))
-        info['价格中位数'] = np.median(values)
         self.info_list.append(info)
+
+    def get_rent_middle(self, url):
+        price_list = []
+        next_url = url
+        while True:
+            resp = self.get_response(url=next_url)
+            doc = pyquery.PyQuery(resp)
+            prices = doc('.m-house-list > li .price > span')
+            for price in prices.items():
+                price_list.append(int(price.text().strip()))
+            next_url = doc('.iNxt').attr('href')
+            if not next_url:
+                break
+        return np.median(price_list)
+    
+
 
     def save_as_json(self):
         json.dump(self.info_list, open('final_info.json', 'w',
@@ -117,7 +129,7 @@ class AnjukeSpider(object):
         f.seek(0)
         # 从当前位置截断字符串
         f.truncate()
-        fieldnames = ['房源id', '维度,经度', '房源名称', '物业类型', '物业费', '建造年代', '绿化率', '所属商圈', '二手房房源数', '租房源数', '均价', '价格中位数']
+        fieldnames = ['房源id', '纬度', '经度', '房源名称', '物业类型', '物业费', '建造年代', '绿化率', '所属商圈', '二手房房源数', '租房源数', '均价', '租金价格中位数']
         writer = csv.DictWriter(f, fieldnames=fieldnames)
 
         writer.writeheader()
