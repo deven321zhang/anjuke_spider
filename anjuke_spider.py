@@ -4,6 +4,8 @@ import time
 import json
 import requests
 import re
+import csv, codecs
+import numpy as np
 
 requests.packages.urllib3.disable_warnings()
 
@@ -53,9 +55,10 @@ class AnjukeSpider(object):
         pyquery_doc = pyquery.PyQuery(resp)
 
         house_url = pyquery_doc('.comm-title > a').attr('href')
-        match_obj = re.search(r'commid=(\d+)', house_url, re.S)
-        house_id = match_obj.group(1)
-        info['房源id'] = house_id
+        match_obj = re.search(r'l1=(\d+\.\d+)&l2=(\d+\.\d+).*?commid=(\d+)', house_url, re.S)
+        
+        info['房源id'] = match_obj.group(3)
+        info['维度,经度'] = '{},{}'.format(match_obj.group(1), match_obj.group(2))
         info['房源名称'] = pyquery_doc('.comm-title > a').attr('title')
 
         dts = pyquery_doc('.basic-infos-box > dl dt').items()
@@ -92,13 +95,37 @@ class AnjukeSpider(object):
 
         match_obj = re.search(r'"comm_midprice":"(\d+)"', resp.decode(), re.S)
         info['均价'] = match_obj.group(1)
+
+        match_obj = re.search(r'"community":(\[.*?\])', resp.decode(), re.S)
+        price_list = eval(match_obj.group(1))
+        if len(price_list) >= 10:
+            price_list = price_list[-10:]
+        values = []
+        for price_dict in price_list:
+            for value in price_dict.values():
+                values.append(int(value))
+        info['价格中位数'] = np.median(values)
         self.info_list.append(info)
-        
 
     def save_as_json(self):
         json.dump(self.info_list, open('final_info.json', 'w',
                                        encoding='utf-8'), indent=2, ensure_ascii=False)
         print('save file successful')
+
+    def save_to_csv(self):
+        f = codecs.open('anjuke.csv', 'a', encoding='utf8')
+        f.seek(0)
+        # 从当前位置截断字符串
+        f.truncate()
+        fieldnames = ['房源id', '维度,经度', '房源名称', '物业类型', '物业费', '建造年代', '绿化率', '所属商圈', '二手房房源数', '租房源数', '均价', '价格中位数']
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+
+        writer.writeheader()
+
+        for item in self.info_list:
+            writer.writerow(item)
+
+        f.close()
 
     def run(self):
         for page_num in range(self.current_page, self.max_page + 1):
@@ -114,12 +141,16 @@ class AnjukeSpider(object):
             self.parse_detail(response)
 
         self.save_as_json()
+        self.save_to_csv()
+
+        # 重置临时存储的数据
         with open('current_page.txt', 'w', encoding='utf-8') as f:
             f.write(str(0))
         json.dump([], open('url_list.json', 'w',
                                     encoding='utf-8'), indent=2, ensure_ascii=False)
         json.dump([], open('info_list.json', 'w',
                                     encoding='utf-8'), indent=2, ensure_ascii=False)
+        
 
 
 if __name__ == '__main__':
