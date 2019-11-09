@@ -65,7 +65,8 @@ class AnjukeSpider(object):
         dts = pyquery_doc('.basic-infos-box > dl dt').items()
         dds = pyquery_doc('.basic-infos-box > dl dd').items()
         for dt, dd in zip(dts, dds):
-            dt_text = dt.text().replace(' ', '')
+            a = dt.text().replace(' ', '')
+            dt_text = "".join(a.split())
             if '物业类型' in dt_text:
                 info['物业类型'] = dd.text().strip()
 
@@ -125,11 +126,11 @@ class AnjukeSpider(object):
         print('save file successful')
 
     def save_to_csv(self):
-        f = codecs.open('anjuke.csv', 'a', encoding='utf8')
+        f = codecs.open('anjuke.csv', 'w', encoding='gbk')
         f.seek(0)
         # 从当前位置截断字符串
         f.truncate()
-        fieldnames = ['房源id', '纬度', '经度', '房源名称', '物业类型', '物业费', '建造年代', '绿化率', '所属商圈', '二手房房源数', '租房源数', '均价', '租金价格中位数']
+        fieldnames = ['房源id', '纬度', '经度', '房源名称', '物业类型', '物业费', '建造年代', '容积率', '绿化率', '所属商圈', '二手房房源数', '租房源数', '均价', '租金价格中位数']
         writer = csv.DictWriter(f, fieldnames=fieldnames)
 
         writer.writeheader()
