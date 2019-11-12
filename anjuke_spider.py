@@ -16,7 +16,7 @@ class AnjukeSpider(object):
     """
 
     def __init__(self):
-        self.base_url = 'https://hf.anjuke.com/community/p{page_num}/'
+        self.base_url = 'https://hf.anjuke.com/community/'
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.100 Safari/537.36',
             'Accept-Encoding': 'gzip, deflate, br',
@@ -28,6 +28,8 @@ class AnjukeSpider(object):
         self.max_page = 50
         self.sleep_time = 0.3
         self.base_ajax_url = 'https://hf.anjuke.com/community_ajax/824/price/?cis={house_id}'
+        self.community_url_list = []
+        self.community_page_num_list = []
 
     def get_response(self, url):
         try:
@@ -42,7 +44,22 @@ class AnjukeSpider(object):
         except requests.ConnectionError as e:
             print('url: {} - e: {}'.format(url, e))
             response = requests.get(url=url, headers=self.headers, verify=False, allow_redirects=False)
+    
+    def get_community(self, resp):
+        doc = pyquery.PyQuery(resp)
+        a_list = doc('.items:first-child .elems-l.pp-mod a:not(:first-child)').items()
+        self.community_url_list = [a.attr('href') for a in a_list]
+        self.community_url_list = self.community_url_list[:-3]
 
+    def parse_page(self, resp):
+        doc = pyquery.PyQuery(resp)
+        curr_page = doc('.curr').text().strip()
+        if curr_page:
+            self.community_page_num_list.append(int(curr_page))
+        else:
+            last_page = doc('.multi-page a:last-of-type').text().strip()
+            self.community_page_num_list.append(int(last_page))
+        
     def get_url_list(self, resp):
         pyquery_doc = pyquery.PyQuery(resp)
         lis = pyquery_doc('.li-itemmod').items()
@@ -141,11 +158,28 @@ class AnjukeSpider(object):
         f.close()
 
     def run(self):
-        for page_num in range(self.current_page, self.max_page + 1):
-            self.current_page = page_num
-            url = self.base_url.format(page_num=str(page_num))
-            response = self.get_response(url)
-            self.get_url_list(response)
+        # resp = self.get_response(self.base_url)
+    
+        # # 获取所有小区的url
+        # self.get_community(resp)
+        # for community_url in self.community_url_list:
+        #     resp = self.get_response(community_url + 'p50/')
+        #     # 解析第50页， 分析页数
+        #     self.parse_page(resp)
+
+        # # 遍历获取所有列表页的url
+        # for community_url, page_num in zip(self.community_url_list, self.community_page_num_list):
+        #     for page in range(1, page_num + 1):
+        #         url = '{}p{}/'.format(community_url, page)
+        #         response = self.get_response(url)
+        #         self.get_url_list(response)
+            
+
+        # for page_num in range(self.current_page, self.max_page + 1):
+        #     self.current_page = page_num
+        #     url = self.base_url.format(page_num=str(page_num))
+        #     response = self.get_response(url)
+        #     self.get_url_list(response)
 
         while self.url_list:
             url = self.url_list.pop()
@@ -171,7 +205,7 @@ if __name__ == '__main__':
         spider = AnjukeSpider()
         spider.run()
     except Exception as e:
-        print('e: {}'.format(e))
+        print('{}, e: {}'.format(type(e), e))
         with open('current_page.txt', 'w', encoding='utf-8') as f:
             f.write(str(spider.current_page))
         json.dump(spider.url_list, open('url_list.json', 'w',
